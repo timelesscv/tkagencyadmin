@@ -1,0 +1,9 @@
+{
+  "name": "TK Agency Management Portal",
+  "description": "A modern management portal for TK Agency to track contracts, offices, and applicants across multiple countries.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+

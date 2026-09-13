@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe area support for iOS / Android notch and gesture bar */
+.safe-area-bottom {
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px));
+}
+
+.safe-area-top {
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+}
+
+/* Touch targets and smooth scrolling */
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+/* Prevent accidental text selection during fast tapping on buttons */
+button, nav, header {
+  -webkit-touch-callout: none;
+}
