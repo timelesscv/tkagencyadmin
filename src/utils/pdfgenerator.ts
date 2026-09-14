@@ -125,6 +125,17 @@ export const getCountryForOffice = (officeName: string): 'jordan' | 'kuwait' | '
   return 'jordan';
 };
 
+export const getTemplateBases = (country: string, officeName: string): string[] => {
+  const normalizedOffice = getNormalizedOfficeKey(officeName);
+  const bases: string[] = [`${country}_${normalizedOffice}`];
+  if (normalizedOffice === 'options') {
+    bases.push(`${country}_option`);
+  } else if (normalizedOffice === 'option') {
+    bases.push(`${country}_options`);
+  }
+  return Array.from(new Set(bases));
+};
+
 export const getOfficePdfSlug = (officeName: string): string => {
   const key = getNormalizedOfficeKey(officeName);
   if (key === 'options' || key === 'option') return 'OPTIONS';
@@ -791,26 +802,27 @@ export const renderCountryPDFDoc = async (
   };
 
   // 1. LOAD TEMPLATE PAGES
-  const normalizedOffice = getNormalizedOfficeKey(office);
-  const templateBase = `${country}_${normalizedOffice}`;
+  const templateBases = getTemplateBases(country, office);
   const extensions = ['.jpg', '.JPG', '.png', '.jpeg'];
 
   let bg1: HTMLImageElement | null = null;
   let bg2: HTMLImageElement | null = null;
 
-  for (const ext of extensions) {
-    if (!bg1) {
-      try {
-        bg1 = await loadImage(`/templates/${templateBase}_1${ext}`);
-      } catch {
-        // try next
+  for (const base of templateBases) {
+    for (const ext of extensions) {
+      if (!bg1) {
+        try {
+          bg1 = await loadImage(`/templates/${base}_1${ext}`);
+        } catch {
+          // try next
+        }
       }
-    }
-    if (!bg2) {
-      try {
-        bg2 = await loadImage(`/templates/${templateBase}_2${ext}`);
-      } catch {
-        // try next
+      if (!bg2) {
+        try {
+          bg2 = await loadImage(`/templates/${base}_2${ext}`);
+        } catch {
+          // try next
+        }
       }
     }
   }
@@ -1166,13 +1178,14 @@ export const renderCVToCanvas = async (
   ctx.fillRect(0, 0, targetW, targetH);
 
   // Background template
-  const normalizedOffice = getNormalizedOfficeKey(officeName);
-  const templateBase = `${country}_${normalizedOffice}`;
-  const extensions = ['.jpg', '.png', '.jpeg'];
+  const templateBases = getTemplateBases(country, officeName);
+  const extensions = ['.jpg', '.JPG', '.png', '.jpeg'];
   let bgImg: HTMLImageElement | null = null;
-  for (const ext of extensions) {
-    if (!bgImg) {
-      bgImg = await loadImageSafe(`/templates/${templateBase}_${pageNumber}${ext}`);
+  for (const base of templateBases) {
+    for (const ext of extensions) {
+      if (!bgImg) {
+        bgImg = await loadImageSafe(`/templates/${base}_${pageNumber}${ext}`);
+      }
     }
   }
 
