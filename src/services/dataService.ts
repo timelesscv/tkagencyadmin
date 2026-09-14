@@ -200,8 +200,43 @@ export async function deleteContractFromSupabase(candidateId: string): Promise<b
   }
 }
 
-// Office Ref Counters synchronization with Supabase
+// In-memory cloud cache for office reference counters (NO computer localStorage sync)
+let memoryOfficeCounters: OfficeRefCounter[] | null = null;
+
+export function getInMemoryOfficeCounters(): OfficeRefCounter[] | null {
+  return memoryOfficeCounters;
+}
+
+export function setInMemoryOfficeCounters(counters: OfficeRefCounter[]): void {
+  memoryOfficeCounters = counters;
+}
+
+// Office Ref Counters synchronization directly with Supabase cloud
 export async function fetchOfficeCountersFromSupabase(): Promise<OfficeRefCounter[] | null> {
+  // 1. Direct Supabase query (works directly on Vercel, localhost, and production)
+  try {
+    const { data: tableData, error } = await supabase
+      .from('office_ref_counters')
+      .select('*');
+
+    if (!error && tableData && tableData.length > 0) {
+      const filtered = tableData.filter(r => (r.office_name || '').trim().toLowerCase() !== 'option' && r.id !== 'option');
+      const mapped: OfficeRefCounter[] = filtered.map(row => ({
+        id: row.id,
+        name: row.office_name,
+        country: row.country,
+        nextNumber: typeof row.next_number === 'number' ? row.next_number : 1,
+        color: row.color || 'border-blue-500'
+      }));
+
+      setInMemoryOfficeCounters(mapped);
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('Direct Supabase counter fetch notice, trying endpoint fallback:', err);
+  }
+
+  // 2. Fallback to /api/counters
   try {
     const res = await fetch(`/api/counters?t=${Date.now()}`, {
       cache: 'no-store',
@@ -213,46 +248,118 @@ export async function fetchOfficeCountersFromSupabase(): Promise<OfficeRefCounte
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.counters) && data.counters.length > 0) {
+        setInMemoryOfficeCounters(data.counters);
         return data.counters;
       }
     }
-    return null;
   } catch (err) {
     console.warn('Failed to fetch office counters from backend/Supabase:', err);
-    return null;
   }
+
+  return memoryOfficeCounters;
 }
 
 export async function persistOfficeCountersToSupabase(counters: OfficeRefCounter[]): Promise<boolean> {
+  const cleanCounters = counters.filter(item => (item.name || '').trim().toLowerCase() !== 'option');
+  setInMemoryOfficeCounters(cleanCounters);
+
+  // 1. Direct Supabase upsert
+  try {
+    for (const item of cleanCounters) {
+      const id = (item.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      await supabase.from('office_ref_counters').upsert({
+        id,
+        office_name: item.name,
+        country: item.country || 'Jordan',
+        next_number: typeof item.nextNumber === 'number' ? item.nextNumber : 1,
+        color: item.color || 'border-blue-500',
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: cleanCounters }));
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('tk_counters_channel');
+      channel.postMessage({ type: 'counters_updated', counters: cleanCounters });
+      channel.close();
+    }
+    return true;
+  } catch (err) {
+    console.warn('Direct Supabase counter upsert error, falling back to API:', err);
+  }
+
+  // 2. Fallback to /api/counters
   try {
     const res = await fetch('/api/counters', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counters })
+      body: JSON.stringify({ counters: cleanCounters })
     });
     if (res.ok) {
-      try {
-        localStorage.setItem('tk_office_counters', JSON.stringify(counters));
-        window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: counters }));
-        if (typeof BroadcastChannel !== 'undefined') {
-          const channel = new BroadcastChannel('tk_counters_channel');
-          channel.postMessage({ type: 'counters_updated', counters });
-          channel.close();
-        }
-      } catch {
-        // ignore
-      }
+      window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: cleanCounters }));
       return true;
     }
-    return false;
   } catch (err) {
-    console.warn('Failed to persist office counters to Supabase:', err);
-    return false;
+    console.warn('Failed to persist office counters to API:', err);
   }
+
+  return false;
 }
 
-// Atomically increment counter on Supabase backend (guarantees no collisions across devices)
+// Atomically increment counter on Supabase cloud (guarantees no collisions across devices)
 export async function incrementOfficeCounterOnSupabase(officeName: string): Promise<{ allocatedNumber: number; counters: OfficeRefCounter[] } | null> {
+  const normOffice = officeName.trim().toLowerCase();
+  const officeKey = normOffice.replace(/[^a-z0-9]/g, '');
+
+  // 1. Direct Supabase atomic increment
+  try {
+    const { data: tableRows, error: selectErr } = await supabase
+      .from('office_ref_counters')
+      .select('*');
+
+    if (!selectErr && tableRows && tableRows.length > 0) {
+      const target = tableRows.find(
+        r => r.id === officeKey || 
+             r.office_name.toLowerCase() === normOffice || 
+             normOffice.includes(r.id) ||
+             r.id.includes(officeKey)
+      );
+
+      if (target) {
+        const allocatedNumber = typeof target.next_number === 'number' ? target.next_number : 1;
+        const nextNumber = allocatedNumber + 1;
+
+        const { error: updateErr } = await supabase
+          .from('office_ref_counters')
+          .update({ next_number: nextNumber, updated_at: new Date().toISOString() })
+          .eq('id', target.id);
+
+        if (!updateErr) {
+          const updatedCounters: OfficeRefCounter[] = tableRows.map(r => ({
+            id: r.id,
+            name: r.office_name,
+            country: r.country,
+            nextNumber: r.id === target.id ? nextNumber : (typeof r.next_number === 'number' ? r.next_number : 1),
+            color: r.color || 'border-blue-500'
+          }));
+
+          setInMemoryOfficeCounters(updatedCounters);
+          window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: updatedCounters }));
+          if (typeof BroadcastChannel !== 'undefined') {
+            const channel = new BroadcastChannel('tk_counters_channel');
+            channel.postMessage({ type: 'counters_updated', counters: updatedCounters });
+            channel.close();
+          }
+
+          return { allocatedNumber, counters: updatedCounters };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Direct Supabase increment notice, falling back to API:', err);
+  }
+
+  // 2. Fallback to /api/counters/increment
   try {
     const res = await fetch('/api/counters/increment', {
       method: 'POST',
@@ -261,43 +368,43 @@ export async function incrementOfficeCounterOnSupabase(officeName: string): Prom
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.success) {
-        if (data.counters && Array.isArray(data.counters)) {
-          try {
-            localStorage.setItem('tk_office_counters', JSON.stringify(data.counters));
-            window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: data.counters }));
-            if (typeof BroadcastChannel !== 'undefined') {
-              const channel = new BroadcastChannel('tk_counters_channel');
-              channel.postMessage({ type: 'counters_updated', counters: data.counters });
-              channel.close();
-            }
-          } catch {
-            // ignore
-          }
-        }
+      if (data && data.success && data.counters) {
+        setInMemoryOfficeCounters(data.counters);
+        window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: data.counters }));
         return {
           allocatedNumber: data.allocatedNumber,
           counters: data.counters
         };
       }
     }
-    return null;
   } catch (err) {
-    console.warn('Failed to atomically increment counter on Supabase:', err);
-    return null;
+    console.warn('Failed to increment counter on backend:', err);
   }
+
+  return null;
 }
 
 // Check if dedicated table exists on Supabase
 export async function fetchCountersSchemaStatus(): Promise<{ tableExists: boolean; sqlToCreate: string; message: string } | null> {
   try {
-    const res = await fetch('/api/counters/schema-status');
-    if (res.ok) {
-      return await res.json();
+    const { data, error } = await supabase.from('office_ref_counters').select('id').limit(1);
+    const tableExists = !error;
+    return {
+      tableExists,
+      sqlToCreate: '',
+      message: tableExists 
+        ? "Dedicated Supabase table 'office_ref_counters' is active."
+        : "Checking Supabase schema status."
+    };
+  } catch {
+    try {
+      const res = await fetch('/api/counters/schema-status');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // ignore
     }
-    return null;
-  } catch (err) {
-    console.warn('Failed to check counters schema status:', err);
     return null;
   }
 }

@@ -578,7 +578,11 @@ ON CONFLICT (id) DO NOTHING;`;
       });
 
       // Attempt extraction using resilient model selection with fallback
-      const candidateModels = ["gemini-3.1-flash-lite", "gemini-3.8-flash"];
+      const candidateModels = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.8-flash"
+      ];
       let response: any = null;
       let lastModelError: any = null;
 

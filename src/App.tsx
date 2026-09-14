@@ -59,6 +59,7 @@ import {
   persistOfficeCountersToSupabase,
   incrementOfficeCounterOnSupabase
 } from './services/dataService';
+import { supabase } from './lib/supabase';
 
 export const App: React.FC = () => {
   // Main Navigation state
@@ -116,10 +117,11 @@ export const App: React.FC = () => {
       const saved = localStorage.getItem('tk_profile');
       if (saved) {
         const parsed = JSON.parse(saved);
+        const pfp = (parsed.pfp && parsed.pfp !== '/logo2.png') ? parsed.pfp : '/logo.png';
         return {
           name: parsed.name || 'TK Agency',
           username: parsed.username || 'Tkagent',
-          pfp: parsed.pfp || '/logo2.png',
+          pfp,
         };
       }
     } catch {
@@ -128,7 +130,7 @@ export const App: React.FC = () => {
     return {
       name: 'TK Agency',
       username: 'Tkagent',
-      pfp: '/logo2.png',
+      pfp: '/logo.png',
     };
   });
 
@@ -179,44 +181,56 @@ export const App: React.FC = () => {
     return filtered;
   };
 
-  // Office Reference Number Counters (Natural Numbers)
-  const [officeCounters, setOfficeCounters] = useState<OfficeRefCounter[]>(() => {
-    try {
-      const saved = localStorage.getItem('tk_office_counters');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return sanitizeCountersList(parsed);
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return defaultOfficeCounters;
-  });
-
-  // Save Office Counters to LocalStorage when updated locally
-  useEffect(() => {
-    try {
-      localStorage.setItem('tk_office_counters', JSON.stringify(officeCounters));
-    } catch (e) {
-      console.error('LocalStorage save error for office counters', e);
-    }
-  }, [officeCounters]);
+  // Office Reference Number Counters (Strictly Cloud-Synchronized, No Local Computer Persistence)
+  const [officeCounters, setOfficeCounters] = useState<OfficeRefCounter[]>(defaultOfficeCounters);
 
   // Handle explicit manual counter updates from Settings
   const handleUpdateOfficeCounters = useCallback((updated: OfficeRefCounter[]) => {
     const clean = sanitizeCountersList(updated);
     setOfficeCounters(clean);
-    try {
-      localStorage.setItem('tk_office_counters', JSON.stringify(clean));
-    } catch (e) {
-      console.warn('LocalStorage save error', e);
-    }
     persistOfficeCountersToSupabase(clean).catch(err => {
       console.warn('Could not sync office counters to Supabase:', err);
     });
   }, []);
+
+  // First thing: Sync ref numbers from cloud, and check for updates
+  const syncRefNumbersAndCheckUpdates = useCallback(async (showNotification = false) => {
+    // 1. FIRST THING: Sync office ref numbers from cloud to the app
+    try {
+      const remoteCounters = await fetchOfficeCountersFromSupabase();
+      if (remoteCounters && remoteCounters.length > 0) {
+        const clean = sanitizeCountersList(remoteCounters);
+        setOfficeCounters(clean);
+        if (showNotification) {
+          toast.success('Office reference numbers synchronized from cloud');
+        }
+      }
+    } catch (err) {
+      console.warn('Office ref counters sync notice:', err);
+    }
+
+    // 2. Check for updates on contracts and candidates
+    try {
+      const remoteContracts = await fetchContractsFromSupabase();
+      if (remoteContracts && remoteContracts.length > 0) {
+        setContracts(remoteContracts);
+      }
+    } catch (err) {
+      console.warn('Contracts sync notice:', err);
+    }
+  }, []);
+
+  const handleLoginSuccess = useCallback(() => {
+    setIsAuthenticated(true);
+    // Remove any legacy ref number sync from computer
+    try {
+      localStorage.removeItem('tk_office_counters');
+    } catch {
+      // ignore
+    }
+    // First thing after login: sync ref numbers to the app and check for updates
+    syncRefNumbersAndCheckUpdates(true);
+  }, [syncRefNumbersAndCheckUpdates]);
 
   // Real-time synchronization when counters are incremented or updated
   useEffect(() => {
@@ -259,41 +273,52 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Multi-Device Counter Polling & Active Focus Sync
+  // Multi-Device Cloud Sync & Live Supabase Realtime Subscription
   useEffect(() => {
-    let isSubscribed = true;
-    const syncCountersFromRemote = async () => {
-      try {
-        const remoteCounters = await fetchOfficeCountersFromSupabase();
-        if (remoteCounters && remoteCounters.length > 0 && isSubscribed) {
-          const clean = sanitizeCountersList(remoteCounters);
+    if (!isAuthenticated) return;
+
+    // Purge any legacy ref number sync from computer
+    try {
+      localStorage.removeItem('tk_office_counters');
+    } catch {
+      // ignore
+    }
+
+    // Immediate initial sync on app load
+    syncRefNumbersAndCheckUpdates(false);
+
+    // Live Real-Time Supabase Subscription
+    const realtimeChannel = supabase
+      .channel('office_ref_counters_realtime_app')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'office_ref_counters' }, async () => {
+        try {
+          const fresh = await fetchOfficeCountersFromSupabase();
+          if (fresh && fresh.length > 0) {
+            setOfficeCounters(sanitizeCountersList(fresh));
+          }
+        } catch {
+          // ignore
+        }
+      })
+      .subscribe();
+
+    // Secondary safety poll every 5 seconds so all devices reflect increments
+    const intervalId = setInterval(() => {
+      fetchOfficeCountersFromSupabase().then((remote) => {
+        if (remote && remote.length > 0) {
           setOfficeCounters(prev => {
-            const prevStr = JSON.stringify(prev);
-            const nextStr = JSON.stringify(clean);
-            if (prevStr === nextStr) return prev;
-            try {
-              localStorage.setItem('tk_office_counters', nextStr);
-            } catch {
-              // ignore
-            }
+            const clean = sanitizeCountersList(remote);
+            if (JSON.stringify(prev) === JSON.stringify(clean)) return prev;
             return clean;
           });
         }
-      } catch (err) {
-        console.warn('Background counter sync notice:', err);
-      }
-    };
+      }).catch(() => {});
+    }, 5000);
 
-    // Initial fetch on mount
-    syncCountersFromRemote();
-
-    // Poll every 5 seconds so multiple devices reflect increments in real time
-    const intervalId = setInterval(syncCountersFromRemote, 5000);
-
-    const onFocus = () => syncCountersFromRemote();
+    const onFocus = () => syncRefNumbersAndCheckUpdates(false);
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        syncCountersFromRemote();
+        syncRefNumbersAndCheckUpdates(false);
       }
     };
 
@@ -301,12 +326,12 @@ export const App: React.FC = () => {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      isSubscribed = false;
+      supabase.removeChannel(realtimeChannel);
       clearInterval(intervalId);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [isAuthenticated, syncRefNumbersAndCheckUpdates]);
 
   const handleIncrementOfficeCounter = (officeName: string) => {
     // Atomically increment on backend Supabase
@@ -769,7 +794,7 @@ export const App: React.FC = () => {
     return (
       <>
         <Toaster richColors position="top-right" theme="dark" />
-        <LoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />
+        <LoginScreen onLoginSuccess={handleLoginSuccess} />
       </>
     );
   }
@@ -885,7 +910,7 @@ export const App: React.FC = () => {
           >
             <div className="w-10 h-10 rounded-full bg-[#1b1536] border border-pink-500/40 flex items-center justify-center text-pink-400 font-bold overflow-hidden shrink-0 shadow-md">
               <img 
-                src={agencyProfile.pfp || '/logo2.png'} 
+                src={agencyProfile.pfp || '/logo.png'} 
                 alt="TK Agency" 
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -967,7 +992,7 @@ export const App: React.FC = () => {
               title="Agency Settings"
             >
               <img 
-                src={agencyProfile.pfp || '/logo2.png'} 
+                src={agencyProfile.pfp || '/logo.png'} 
                 alt="Profile" 
                 className="w-full h-full object-cover"
                 onError={(e) => {
@@ -1758,7 +1783,7 @@ export const App: React.FC = () => {
                 currentView === 'settings' ? 'border-pink-500 ring-2 ring-pink-500/30' : 'border-white/20'
               }`}>
                 <img
-                  src={agencyProfile.pfp || '/logo2.png'}
+                  src={agencyProfile.pfp || '/logo.png'}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   onError={(e) => {

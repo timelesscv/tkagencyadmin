@@ -11,7 +11,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [logoSrc, setLogoSrc] = useState('/logo2.png');
+  const [logoSrc, setLogoSrc] = useState('/logo.png');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

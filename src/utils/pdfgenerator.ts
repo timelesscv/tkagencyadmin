@@ -10,6 +10,11 @@ import {
   AllFormData,
 } from '../types';
 import { defaultOfficeCounters } from '../constants';
+import {
+  getInMemoryOfficeCounters,
+  setInMemoryOfficeCounters,
+  incrementOfficeCounterOnSupabase
+} from '../services/dataService';
 
 // ==========================================
 // TYPES & COORDINATES
@@ -138,22 +143,7 @@ export const getOfficeRefNumberFromSettings = (
 ): string => {
   let list = counters;
   if (!list || list.length === 0) {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('tk_office_counters');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-    if (!list || list.length === 0) {
-      list = defaultOfficeCounters;
-    }
+    list = getInMemoryOfficeCounters() || defaultOfficeCounters;
   }
 
   const slug = getOfficePdfSlug(officeName);
@@ -182,51 +172,35 @@ export const getOfficeRefNumberFromSettings = (
 
 export const incrementOfficeRefCounter = (officeName: string): number => {
   try {
-    let list: OfficeRefCounter[] = [];
+    let list: OfficeRefCounter[] = getInMemoryOfficeCounters() || [...defaultOfficeCounters];
+    const slug = getOfficePdfSlug(officeName);
+    let updatedNext = 2;
+
+    list = list.map(item => {
+      if (
+        item.name.toLowerCase() === officeName.toLowerCase() ||
+        getOfficePdfSlug(item.name) === slug
+      ) {
+        const current = typeof item.nextNumber === 'number' ? item.nextNumber : 1;
+        updatedNext = current + 1;
+        return {
+          ...item,
+          nextNumber: updatedNext,
+        };
+      }
+      return item;
+    });
+
+    setInMemoryOfficeCounters(list);
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tk_office_counters');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        } catch {
-          // ignore
-        }
-      }
-      if (list.length === 0) {
-        list = [...defaultOfficeCounters];
-      }
-
-      const slug = getOfficePdfSlug(officeName);
-      let updatedNext = 2;
-
-      list = list.map(item => {
-        if (
-          item.name.toLowerCase() === officeName.toLowerCase() ||
-          getOfficePdfSlug(item.name) === slug
-        ) {
-          const current = typeof item.nextNumber === 'number' ? item.nextNumber : 1;
-          updatedNext = current + 1;
-          return {
-            ...item,
-            nextNumber: updatedNext,
-          };
-        }
-        return item;
-      });
-
-      localStorage.setItem('tk_office_counters', JSON.stringify(list));
       window.dispatchEvent(new CustomEvent('tk_office_counters_updated', { detail: list }));
-
-      // Also atomically update Supabase in background
-      import('../services/dataService')
-        .then((m) => m.incrementOfficeCounterOnSupabase(officeName))
-        .catch((err) => console.warn('Supabase counter atomic sync notice:', err));
-
-      return updatedNext;
     }
+
+    // Atomically increment on Supabase cloud
+    incrementOfficeCounterOnSupabase(officeName)
+      .catch((err) => console.warn('Supabase counter atomic sync notice:', err));
+
+    return updatedNext;
   } catch (err) {
     console.error('Failed to increment office counter', err);
   }
