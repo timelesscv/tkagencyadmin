@@ -1,5 +1,6 @@
-import { Contract, OfficeRefCounter, GeneratedCVInfo, Office } from '../types';
+import { Contract, OfficeRefCounter, GeneratedCVInfo } from '../types';
 import { getOfficesForContract, getOfficePdfFileName } from '../utils/pdfgenerator';
+import { setItemIndexedDB, removeItemIndexedDB } from '../utils/indexedDB';
 
 const CLOUDFLARE_R2_BASE_URL = (import.meta.env.VITE_CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-7001b923b73d49ab9ef20403dc734dbc.r2.dev').replace(/\/+$/, '');
 
@@ -33,10 +34,13 @@ export const registerCandidateCVsOnCloudflare = (
     };
   });
 
+  // Store in IndexedDB for reliable quota-free persistence
+  setItemIndexedDB(`tk_cf_cvs_${contract.id}`, generatedCVs);
+
   try {
     localStorage.setItem(`tk_cf_cvs_${contract.id}`, JSON.stringify(generatedCVs));
-  } catch (e) {
-    console.error('Failed to cache Cloudflare CV registry', e);
+  } catch {
+    // Gracefully ignore localStorage quota limit
   }
 
   return generatedCVs;
@@ -102,10 +106,12 @@ export const pruneCandidateCVsAfterAllocation = (
   // Retain only the assigned office CV in active storage
   const remainingCVs: GeneratedCVInfo[] = [retained];
 
+  setItemIndexedDB(`tk_cf_cvs_${contract.id}`, remainingCVs);
+
   try {
     localStorage.setItem(`tk_cf_cvs_${contract.id}`, JSON.stringify(remainingCVs));
-  } catch (e) {
-    console.error('Failed to update Cloudflare CV registry', e);
+  } catch {
+    // Gracefully ignore localStorage quota limit
   }
 
   return {
@@ -120,6 +126,7 @@ export const pruneCandidateCVsAfterAllocation = (
  * Removes all Cloudflare assets for a deleted candidate
  */
 export const removeCandidateFromCloudflare = (contractId: string): void => {
+  removeItemIndexedDB(`tk_cf_cvs_${contractId}`);
   try {
     localStorage.removeItem(`tk_cf_cvs_${contractId}`);
   } catch {
