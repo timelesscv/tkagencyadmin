@@ -60,6 +60,11 @@ import {
   incrementOfficeCounterOnSupabase
 } from './services/dataService';
 import { supabase } from './lib/supabase';
+import { 
+  saveContractsToIndexedDB, 
+  loadContractsFromIndexedDB, 
+  safeSaveContractsToLocalStorage 
+} from './utils/indexedDB';
 
 export const App: React.FC = () => {
   // Main Navigation state
@@ -355,17 +360,22 @@ export const App: React.FC = () => {
     });
   };
 
-  // Sync to LocalStorage
+  // Sync to IndexedDB (unlimited quota for full contracts & photos) and safe LocalStorage
   useEffect(() => {
-    try {
-      localStorage.setItem('tk_contracts', JSON.stringify(contracts));
-    } catch (e) {
-      console.error('LocalStorage save error', e);
-    }
+    saveContractsToIndexedDB(contracts);
+    safeSaveContractsToLocalStorage(contracts);
   }, [contracts]);
 
-  // Load contracts from Supabase on mount
+  // Load contracts from IndexedDB and Supabase on mount
   useEffect(() => {
+    // 1. Rehydrate full local contracts from IndexedDB
+    loadContractsFromIndexedDB().then(saved => {
+      if (saved && saved.length > 0) {
+        setContracts(saved);
+      }
+    });
+
+    // 2. Sync from Supabase remote database
     fetchContractsFromSupabase().then(remote => {
       if (remote && remote.length > 0) {
         setContracts(remote);
