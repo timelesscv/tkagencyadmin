@@ -44,6 +44,17 @@ interface NewContractFormProps {
   onIncrementOfficeCounter?: (officeName: string) => void;
 }
 
+const extractFatherGrandfatherName = (name: string): string => {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 3) {
+    return `${parts[1]} ${parts[2]}`;
+  } else if (parts.length === 2) {
+    return parts[1];
+  }
+  return '';
+};
+
 export const NewContractForm: React.FC<NewContractFormProps> = ({
   onSubmitContract,
   onCancel,
@@ -56,6 +67,19 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
   const [passportPhoto, setPassportPhoto] = useState<string | undefined>(undefined);
   const [isScanningMRZ, setIsScanningMRZ] = useState(false);
 
+  // Section 6: Broker & Emergency Contact details
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactAddress, setEmergencyContactAddress] = useState('');
+  const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('Father');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+  const [brokerName, setBrokerName] = useState('');
+  const [brokerNumber, setBrokerNumber] = useState('');
+
+  // Track if emergency contact fields were manually modified by user
+  const [isEmergencyNameManuallyEdited, setIsEmergencyNameManuallyEdited] = useState(false);
+  const [isEmergencyPhoneManuallyEdited, setIsEmergencyPhoneManuallyEdited] = useState(false);
+  const [isEmergencyAddressManuallyEdited, setIsEmergencyAddressManuallyEdited] = useState(false);
+
   const handlePassportFileSelected = async (file: File) => {
     try {
       setIsScanningMRZ(true);
@@ -64,6 +88,10 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
 
       if (scanned.fullName) {
         setFullName(scanned.fullName);
+        if (!isEmergencyNameManuallyEdited) {
+          const fg = extractFatherGrandfatherName(scanned.fullName);
+          if (fg) setEmergencyContactName(fg);
+        }
       }
       if (scanned.passportNumber) {
         setPassportNumber(scanned.passportNumber);
@@ -84,6 +112,9 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
       }
       if (scanned.pob) {
         setPlaceOfBirth(scanned.pob);
+        if (!isEmergencyAddressManuallyEdited) {
+          setEmergencyContactAddress(scanned.pob);
+        }
       }
 
       const isTenYear = scanned.validityYears === 10 || getPassportValidityYears(scanned.passportNumber, scanned.expiryDate) === 10;
@@ -138,15 +169,26 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
   // Section 5: Competency Profile
   const [competencies, setCompetencies] = useState<CompetencyProfile>(defaultCompetenciesNormal);
 
-  // Section 6: Broker & Emergency Contact
-  const [emergencyContactName, setEmergencyContactName] = useState('');
-  const [emergencyContactAddress, setEmergencyContactAddress] = useState('');
-  const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
-  const [brokerName, setBrokerName] = useState('');
-  const [brokerNumber, setBrokerNumber] = useState('');
-
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Full Name handler - autofills Emergency Contact Name with Father + Grandfather name
+  const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setFullName(val);
+    if (!isEmergencyNameManuallyEdited) {
+      const fg = extractFatherGrandfatherName(val);
+      setEmergencyContactName(fg);
+    }
+  };
+
+  // Phone Number handler - autofills Emergency Contact Phone
+  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setPhoneNumber(val);
+    if (!isEmergencyPhoneManuallyEdited) {
+      setEmergencyContactPhone(val);
+    }
+  };
 
   // Auto calculate age when DOB changes
   const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,7 +206,9 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
   const handlePlaceOfBirthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setPlaceOfBirth(val);
-    setEmergencyContactAddress(val);
+    if (!isEmergencyAddressManuallyEdited) {
+      setEmergencyContactAddress(val);
+    }
   };
 
   // When "has previous experience" changes:
@@ -350,7 +394,7 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
               required
               placeholder=""
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={handleFullNameChange}
               className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
             />
           </div>
@@ -406,7 +450,7 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
               type="tel"
               placeholder=""
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              onChange={handlePhoneNumberChange}
               className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
             />
           </div>
@@ -882,14 +926,22 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Contact Name */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Emergency Contact Name
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Emergency Contact Name</span>
+              {emergencyContactName && !isEmergencyNameManuallyEdited && (
+                <span className="text-[10px] text-pink-400 font-normal lowercase">
+                  (autofilled: father + grandfather)
+                </span>
+              )}
             </label>
             <input
               type="text"
               placeholder=""
               value={emergencyContactName}
-              onChange={(e) => setEmergencyContactName(e.target.value)}
+              onChange={(e) => {
+                setEmergencyContactName(e.target.value);
+                setIsEmergencyNameManuallyEdited(true);
+              }}
               className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
             />
           </div>
@@ -910,14 +962,22 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
 
           {/* Contact Phone */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Contact Phone Number
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Contact Phone Number</span>
+              {emergencyContactPhone && !isEmergencyPhoneManuallyEdited && (
+                <span className="text-[10px] text-pink-400 font-normal lowercase">
+                  (autofilled with applicant phone)
+                </span>
+              )}
             </label>
             <input
               type="tel"
               placeholder=""
               value={emergencyContactPhone}
-              onChange={(e) => setEmergencyContactPhone(e.target.value)}
+              onChange={(e) => {
+                setEmergencyContactPhone(e.target.value);
+                setIsEmergencyPhoneManuallyEdited(true);
+              }}
               className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
             />
           </div>
@@ -926,9 +986,9 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
           <div className="space-y-2 sm:col-span-3">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Emergency Contact Address</span>
-              {placeOfBirth && (
+              {emergencyContactAddress && !isEmergencyAddressManuallyEdited && (
                 <span className="text-[10px] text-pink-400 font-normal lowercase">
-                  (autofilled with candidate's place of birth: {placeOfBirth})
+                  (autofilled with place of birth: {placeOfBirth || emergencyContactAddress})
                 </span>
               )}
             </label>
@@ -936,7 +996,10 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
               type="text"
               placeholder=""
               value={emergencyContactAddress}
-              onChange={(e) => setEmergencyContactAddress(e.target.value)}
+              onChange={(e) => {
+                setEmergencyContactAddress(e.target.value);
+                setIsEmergencyAddressManuallyEdited(true);
+              }}
               className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
             />
           </div>
