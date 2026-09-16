@@ -65,6 +65,11 @@ import {
   loadContractsFromIndexedDB, 
   safeSaveContractsToLocalStorage 
 } from './utils/indexedDB';
+import { SeasonalLogo } from './components/SeasonalLogo';
+import { 
+  SeasonalTheme, 
+  getAutoSeasonalTheme 
+} from './utils/seasonalTheme';
 
 export const App: React.FC = () => {
   // Main Navigation state
@@ -138,6 +143,9 @@ export const App: React.FC = () => {
       pfp: '/logo.png',
     };
   });
+
+  // Seasonal logo theme automatically calculated by holiday timeline (5 days before, 2 days after)
+  const effectiveTheme: SeasonalTheme = useMemo(() => getAutoSeasonalTheme(), []);
 
   // Modals state
   const [openedContract, setOpenedContract] = useState<Contract | null>(null);
@@ -821,9 +829,7 @@ export const App: React.FC = () => {
             onClick={() => navigateTo('home')}
             className="flex items-center justify-between cursor-pointer group"
           >
-            <h1 className="font-black text-xl tracking-tight text-white flex items-center">
-              TK AGENCY<span className="text-pink-500 font-extrabold text-2xl leading-none">.</span>
-            </h1>
+            <SeasonalLogo theme={effectiveTheme} size="md" />
           </div>
 
           {/* SIDEBAR NAVIGATION: CONTRACTS VIEW MODE VS STANDARD MODE */}
@@ -968,9 +974,7 @@ export const App: React.FC = () => {
               onClick={() => navigateTo('home')}
               className="flex items-center gap-2 cursor-pointer select-none"
             >
-              <span className="font-black text-lg tracking-tight text-white flex items-center">
-                TK AGENCY<span className="text-pink-500 font-extrabold text-xl leading-none">.</span>
-              </span>
+              <SeasonalLogo theme={effectiveTheme} size="sm" />
               {currentView === 'contracts' && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/15 text-pink-400 border border-pink-500/30 uppercase font-mono">
                   {openedContract ? 'Applicant' : activeSubTab.replace('-', ' ')}
