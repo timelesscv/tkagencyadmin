@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Eye, EyeOff, Lock, User, AlertCircle, ShieldCheck } from 'lucide-react';
+import { SeasonalLogo } from './SeasonalLogo';
+import { getAutoSeasonalTheme, SeasonalTheme } from '../utils/seasonalTheme';
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
@@ -12,6 +14,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [logoSrc, setLogoSrc] = useState('/logo2.png');
+
+  const effectiveTheme: SeasonalTheme = useMemo(() => getAutoSeasonalTheme(), []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,10 +87,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         </div>
 
         {/* Agency Title & Subtitle */}
-        <div className="text-center space-y-1.5 mb-8">
-          <h1 className="text-3xl sm:text-[34px] font-serif font-bold text-white tracking-tight flex items-center justify-center">
-            TK Agency<span className="text-pink-500 font-extrabold text-3xl leading-none">.</span>
-          </h1>
+        <div className="text-center space-y-2 mb-8 flex flex-col items-center">
+          <SeasonalLogo theme={effectiveTheme} size="lg" />
           <p className="text-[11px] font-mono font-bold tracking-[0.22em] text-[#c59b58] uppercase">
             Management Portal Login
           </p>
