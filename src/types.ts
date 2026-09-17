@@ -67,13 +67,13 @@ export interface Contract {
   // Section 5: Competency Profile
   competencies?: CompetencyProfile;
   
-  // Section 6: Broker and Emergency Contact Details
+  // Section 6: Emergency Contact Details
   emergencyContactName?: string;
   emergencyContactAddress?: string;
   emergencyContactRelationship?: string;
   emergencyContactPhone?: string;
-  brokerName: string;
-  brokerNumber: string;
+  brokerName?: string;
+  brokerNumber?: string;
   
   // Meta & Status tracking
   date: string;
