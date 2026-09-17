@@ -992,17 +992,17 @@ export const ApplicantDetailModal: React.FC<ApplicantDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Section 6: Emergency Contact & Broker */}
+          {/* Section 6: Emergency Contact */}
           <div className="space-y-4 pt-4 border-t border-white/5">
             <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
               <PhoneCall size={14} className="text-pink-500" />
-              <span>6. CONTACTS & BROKER</span>
+              <span>6. EMERGENCY CONTACT</span>
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               {/* Emergency Contact */}
               <div className="p-5 rounded-2xl bg-[#070617] border border-white/5 space-y-3">
                 <span className="text-xs font-bold text-pink-400 block uppercase">Emergency Contact</span>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
                     type="text"
                     placeholder="Contact Name"
@@ -1025,29 +1025,6 @@ export const ApplicantDetailModal: React.FC<ApplicantDetailModalProps> = ({
                     disabled={!isEditingContracts}
                     value={formData.emergencyContactAddress || ''}
                     onChange={(e) => setFormData(p => ({ ...p, emergencyContactAddress: e.target.value }))}
-                    className="w-full bg-[#110f29] border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none col-span-2"
-                  />
-                </div>
-              </div>
-
-              {/* Broker */}
-              <div className="p-5 rounded-2xl bg-[#070617] border border-white/5 space-y-3">
-                <span className="text-xs font-bold text-pink-400 block uppercase">Broker Details</span>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Broker Name"
-                    disabled={!isEditingContracts}
-                    value={formData.brokerName || ''}
-                    onChange={(e) => setFormData(p => ({ ...p, brokerName: e.target.value }))}
-                    className="w-full bg-[#110f29] border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Broker Phone Number"
-                    disabled={!isEditingContracts}
-                    value={formData.brokerNumber || ''}
-                    onChange={(e) => setFormData(p => ({ ...p, brokerNumber: e.target.value }))}
                     className="w-full bg-[#110f29] border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none"
                   />
                 </div>
