@@ -67,13 +67,11 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
   const [passportPhoto, setPassportPhoto] = useState<string | undefined>(undefined);
   const [isScanningMRZ, setIsScanningMRZ] = useState(false);
 
-  // Section 6: Broker & Emergency Contact details
+  // Section 6: Emergency Contact details
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactAddress, setEmergencyContactAddress] = useState('');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('Father');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
-  const [brokerName, setBrokerName] = useState('');
-  const [brokerNumber, setBrokerNumber] = useState('');
 
   // Track if emergency contact fields were manually modified by user
   const [isEmergencyNameManuallyEdited, setIsEmergencyNameManuallyEdited] = useState(false);
@@ -283,8 +281,8 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
         emergencyContactAddress: emergencyContactAddress.trim(),
         emergencyContactRelationship,
         emergencyContactPhone: emergencyContactPhone.trim(),
-        brokerName: brokerName.trim() || 'Direct',
-        brokerNumber: brokerNumber.trim(),
+        brokerName: '',
+        brokerNumber: '',
         office: '', // Available candidate
         date: new Date().toISOString().split('T')[0],
         status: 'Available',
@@ -914,12 +912,12 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
         </div>
       </div>
 
-      {/* SECTION 6: BROKER & EMERGENCY CONTACT DETAILS */}
+      {/* SECTION 6: EMERGENCY CONTACT DETAILS */}
       <div className="bg-[#12122B] rounded-3xl p-6 md:p-8 border border-white/5 shadow-xl space-y-6">
         <div className="flex items-center gap-2 border-b border-pink-500/20 pb-3">
           <PhoneCall size={18} className="text-pink-500" />
           <h3 className="text-sm font-bold text-pink-500 uppercase tracking-widest">
-            Section 6: Broker & Emergency Contact Details
+            Section 6: Emergency Contact Details
           </h3>
         </div>
 
@@ -983,7 +981,7 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
           </div>
 
           {/* Address (Autofilled with place of birth) */}
-          <div className="space-y-2 sm:col-span-3">
+          <div className="space-y-2 sm:col-span-2 lg:col-span-3">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
               <span>Emergency Contact Address</span>
               {emergencyContactAddress && !isEmergencyAddressManuallyEdited && (
@@ -1000,34 +998,6 @@ export const NewContractForm: React.FC<NewContractFormProps> = ({
                 setEmergencyContactAddress(e.target.value);
                 setIsEmergencyAddressManuallyEdited(true);
               }}
-              className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
-            />
-          </div>
-
-          {/* Broker's Name */}
-          <div className="space-y-2 sm:col-span-1">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Broker's Name
-            </label>
-            <input
-              type="text"
-              placeholder=""
-              value={brokerName}
-              onChange={(e) => setBrokerName(e.target.value)}
-              className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
-            />
-          </div>
-
-          {/* Broker's Number */}
-          <div className="space-y-2 sm:col-span-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Broker's Phone Number
-            </label>
-            <input
-              type="tel"
-              placeholder=""
-              value={brokerNumber}
-              onChange={(e) => setBrokerNumber(e.target.value)}
               className="w-full bg-[#050517] border border-white/10 rounded-xl py-3 px-4 text-sm text-white focus:ring-2 focus:ring-pink-500 outline-none transition"
             />
           </div>
